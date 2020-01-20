@@ -1,0 +1,368 @@
+#!/usr/bin/python
+
+from jira import JIRA
+import json
+import curses
+from datetime import datetime, timedelta
+from os.path import expanduser
+from traceback import print_exc
+import configparser
+from curses.textpad import Textbox
+import locale
+from jira.exceptions import JIRAError
+from subprocess import Popen
+from signal import signal, SIGCHLD, SIG_IGN
+
+COLORS = {
+    'default': 0,
+    'bar': 1,
+}
+
+locale.setlocale(locale.LC_ALL, '')
+
+config = configparser.ConfigParser()
+query = ''
+
+
+
+def line(msg, width):
+    return msg[:width] + ' ' * (width - len(msg))
+
+
+
+def addstr(win, *args, **kwargs):
+    try:
+        win.addstr(*args, **kwargs)
+    except curses.error:
+        pass
+
+
+
+def title(win, msg):
+    height, width = win.getmaxyx()
+    addstr(win, 0, 0, line(msg, width), curses.color_pair(COLORS['bar']))
+
+
+
+def status(win, msg):
+    height, width = win.getmaxyx()
+    addstr(win, height - 1, 0, line(msg, width), curses.color_pair(COLORS['bar']))
+
+
+
+def default_status(screen, query, refresh_delta, refresh_every):
+    height, width = screen.getmaxyx()
+
+    jql = f'JQL: {query}'
+
+    fraction = refresh_delta.total_seconds() / refresh_every.total_seconds()
+    fraction = max(0, min(1, fraction))
+    fill_len = 10
+    fill = int(fill_len * fraction)
+    fill_pad = fill_len - fill
+    indicators = '[' + '#' * fill + '-' * fill_pad + ']'
+
+    msg = jql
+    msg += ' ' * max(0, width - len(jql) - len(indicators))
+    msg += indicators
+
+    return msg
+
+
+
+def textbox_input_validator(key):
+    if key in ['KEY_BACKSPACE', '\b', 127]:
+        return curses.KEY_BACKSPACE
+
+    return key
+
+def query_string(win, prompt):
+    height, width = win.getmaxyx()
+    addstr(win, height - 1, 0, prompt, curses.color_pair(COLORS['bar']))
+    curses.curs_set(True)
+    win.refresh()
+
+    editwin = curses.newwin(1, width - len(prompt), height - 1, len(prompt))
+    box = Textbox(editwin)
+    box.edit(textbox_input_validator)
+    out = box.gather()
+
+    curses.curs_set(False)
+    del editwin
+    win.touchwin()
+    win.refresh()
+
+    return out.strip()
+
+
+
+def show_help_screen(win):
+    msg = '''
+    q        Quit program
+    ?        Help
+
+    r        Refresh
+    R        Reload Queries from config (resets query selection to first in list)
+
+    l        Open Issue Permalink
+
+    j, k     Scroll one line down / up
+    g, G     Scroll to top / bottom
+    ^F, ^G   Scroll half a page down / up
+    '''
+
+    height, width = win.getmaxyx()
+    at_y = margin = 2
+    for m in msg.strip().splitlines():
+        if at_y >= height - margin:
+            break
+
+        m = m.strip()
+        addstr(win, at_y, margin, m, curses.color_pair(COLORS['default']))
+        at_y += 1
+
+    at_y += margin*2
+    query_key_length = 5
+
+    for query in config['queries'].keys():
+        if len(query) > query_key_length:
+            query_key_length = len(query)
+
+    format_string = '{:>' + str(query_key_length) + 's}  {:s}'
+
+    addstr(win, at_y, margin, format_string.format('Alias', 'JQL'))
+    at_y += 1
+
+    for alias, query in config['queries'].items():
+        if at_y >= height - margin:
+            break
+
+        addstr(win, at_y, margin, format_string.format(alias, query))
+        at_y +=1
+
+
+
+def show_issues(screen, offset, current, issues):
+    height, width = screen.getmaxyx()
+
+    margin_top = margin_bottom = 1
+
+    usable_height_for_items = height - margin_top - margin_bottom
+    if usable_height_for_items <= 0:
+        return 0
+
+    text = '{:12s}{:10s}{:90s}{:15s}{:30s}{:s}'.format(
+        'Key',
+        'Status',
+        'Summary',
+        'Created',
+        'Creator',
+        'Assignee',
+    )
+
+    addstr(screen, margin_top, 0, text)
+
+    y = margin_top + 1
+    for i, issue in enumerate(issues):
+        if y >= margin_top + usable_height_for_items:
+            break
+
+        attrs = curses.color_pair(COLORS['default'])
+
+        if i + offset == current:
+            attrs |= curses.A_REVERSE
+
+        created = datetime.fromisoformat(issue.fields.created[0:19])
+
+        text = '{:12s}{:10s}{:90s}{:15s}{:30s}'.format(
+            issue.key,
+            issue.fields.status.name,
+            issue.fields.summary,
+            created.strftime('%d.%m. %H:%M'),
+            issue.fields.creator.displayName,
+        )
+
+        if issue.fields.assignee:
+            text += issue.fields.assignee.displayName
+
+        addstr(screen, y,   0, line(text, width), attrs)
+
+        #    'link': issue.permalink(),
+        #    'updated': issue.fields.updated,
+        #    'labels': issue.fields.labels,
+        #    'components': issue.fields.components,
+        #    'type': issue.fields.issuetype.name,
+        #    output[issue.key]['description'] = issue.fields.description
+
+        y += 1
+
+
+
+def open_permalink(link):
+    if 'permalink' not in config['external']:
+        return
+
+    args = config['external']['permalink'].split(' ')
+
+    signal(SIGCHLD, SIG_IGN)
+
+    args_now = []
+    for a in args:
+        if a == '__LINK__':
+            args_now.append(link)
+        else:
+            args_now.append(a)
+
+    Popen(args_now)
+
+
+
+def termira(screen):
+    global config, query
+
+    curses.curs_set(False)
+    curses.use_default_colors()
+    curses.init_pair(COLORS['bar'], curses.COLOR_WHITE, curses.COLOR_BLUE)
+
+    refresh_every = timedelta(seconds=30)
+    refresh_delta = timedelta(seconds=0)
+
+    issues = None
+    show_help = False
+
+    current = 0
+    offset = 0
+
+    while True:
+        height, width = screen.getmaxyx()
+
+        if (issues is None or force_refresh) and query != '':
+            status(screen, 'Refreshing ...')
+            screen.refresh()
+
+            selected = set()
+            issues = jira.search_issues(query, maxResults=50)
+            last_key = datetime.now()
+            refresh_delta = timedelta(seconds=0)
+            force_refresh = False
+
+        screen.erase()
+        title(screen, 'termira v0.1 | q: Quit | ?: Help')
+
+        if show_help:
+            show_help_screen(screen)
+            status(screen, 'Press ? again to exit help')
+        else:
+            status(screen, default_status(screen, query, refresh_delta, refresh_every))
+            show_issues(screen, offset, current, issues)
+
+        screen.refresh()
+        screen.timeout(1000)
+
+
+        try:
+            char = screen.getkey()
+        except:
+            char = None
+        screen.timeout(-1)
+
+        if char in ['q']:
+            return
+
+        if char in ['l']:
+            open_permalink(issues[current].permalink())
+
+        if char in ['r']:
+            force_refresh = True
+            show_help = False
+
+        if char in ['R']:
+            config_tmp = configparser.ConfigParser()
+            config_tmp.read(expanduser('~/.termira.ini'))
+
+            if len(config_tmp['queries'].keys()) > 0:
+                config = config_tmp
+
+                q_list = list(config['queries'].keys())
+                query = config['queries'][q_list[0]]
+                force_refresh = True
+
+            show_help = False
+
+        if char in ['f']:
+            q = query_string(screen, 'filter alias or JQL: ')
+
+            if q in config['queries']:
+                force_refresh = True
+                query = config['queries'][q]
+            elif q != '':
+                force_refresh = True
+                query = q
+
+            show_help = False
+
+        if char in ['?', 'h']:
+            show_help = not show_help
+
+        bottompad = starty = 2
+
+        if char in ['j', 'KEY_DOWN']: current += 1
+        if char in ['k', 'KEY_UP']: current -= 1
+
+        if char in ['g', 'KEY_HOME']: current = 0
+        if char in ['G', 'KEY_END']: current = len(issues) - 1
+
+        if current < 0:
+            current = 0
+        if current >= len(issues):
+            current = len(issues) - 1
+
+        if current - offset >= (height - bottompad) - starty:
+            offset = current - (height - bottompad) + starty + 1
+        if current - offset <= -1:
+            offset = current
+
+        if offset < 0:
+            offset = 0
+        if offset >= len(issues):
+            offset = len(issues) - 1
+
+        if char is not None:
+            last_key = datetime.now()
+            refresh_delta = timedelta(seconds=0)
+        else:
+            refresh_delta = datetime.now() - last_key
+            if refresh_delta > refresh_every:
+                force_refresh = True
+                last_key = datetime.now()
+
+
+if __name__ == '__main__':
+    while True:
+        try:
+            config.read('.termira.ini')
+
+            if 'jira' not in config:
+                raise KeyError("Required Group 'jira' is missing in config")
+
+            jira = JIRA(config['jira']['url'],auth=(config['jira']['user'], config['jira']['pass']))
+
+            queries = list(config['queries'].keys())
+            if len(queries) < 1:
+                raise KeyError('No Queries defined in config')
+
+            query = config['queries'][queries[0]]
+
+            curses.wrapper(termira)
+            exit(0)
+        except JIRAError as e:
+            print("JIRA Error: {}".format(e.status_code))
+            print(e.text)
+            print()
+            input('Press enter to reset and continue.')
+        except Exception:
+            print('It appears we had a whoopsie. Please report this.')
+            print()
+            print_exc()
+            print()
+            input('Press enter to reset and continue.')

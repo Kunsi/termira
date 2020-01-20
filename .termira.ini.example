@@ -1,0 +1,12 @@
+[jira]
+url = https://jira.apps.seibert-media.net
+user = foobar
+pass = foobar
+
+[external]
+permalink = firefox __LINK__
+
+[queries]
+mine-watching = (assignee = currentUser() OR ((reporter = currentUser() OR watcher = currentUser()) AND (assignee != currentUser() OR assignee is EMPTY))) AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
+mine = assignee = currentUser() AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
+watching = (reporter = currentUser() OR watcher = currentUser()) AND (assignee != currentUser() OR assignee is EMPTY) AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
