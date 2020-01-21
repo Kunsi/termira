@@ -150,10 +150,17 @@ def show_transition(screen, offset, current, issues):
 
     try:
         issue = issues[current].key
+        summary = issues[current].fields.summary
 
         transitions = jira.transitions(issue)
     except:
         addstr(screen, margin, margin, 'Error while getting transitions')
+
+        return False
+
+    addstr(screen, y, margin, issue+': '+summary)
+
+    y += 2
 
     for t in transitions:
         addstr(screen, y, margin, '{:5s}  {:s}'.format(t['id'], t['name']))
