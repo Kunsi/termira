@@ -345,7 +345,7 @@ if __name__ == '__main__':
             if 'jira' not in config:
                 raise KeyError("Required Group 'jira' is missing in config")
 
-            jira = JIRA(config['jira']['url'],auth=(config['jira']['user'], config['jira']['pass']))
+            jira = JIRA(config['jira']['url'], auth=(config['jira']['user'], config['jira']['pass']), timeout=10, async_=True, max_retries=2)
 
             queries = list(config['queries'].keys())
             if len(queries) < 1:
