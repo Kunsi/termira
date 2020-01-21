@@ -104,6 +104,8 @@ def show_help_screen(win):
     r        Refresh
     R        Reload Queries from config (resets query selection to first in list)
 
+    t        Transition Issue
+
     l        Open Issue Permalink
 
     j, k     Scroll one line down / up
@@ -139,6 +141,35 @@ def show_help_screen(win):
 
         addstr(win, at_y, margin, format_string.format(alias, query))
         at_y +=1
+
+
+
+def show_transition(screen, offset, current, issues):
+    height, width = screen.getmaxyx()
+    y = margin = 2
+
+    try:
+        issue = issues[current].key
+
+        transitions = jira.transitions(issue)
+    except:
+        addstr(screen, margin, margin, 'Error while getting transitions')
+
+    for t in transitions:
+        addstr(screen, y, margin, '{:5s}  {:s}'.format(t['id'], t['name']))
+
+        y += 1
+
+    transition = query_string(screen, 'Transition ID: ')
+
+    for t in transitions:
+        if transition == t['id']:
+            jira.transition_issue(issue, t['id'])
+            status(screen, 'Transitioning to '+t['name'])
+
+            return True
+
+    return False
 
 
 
@@ -228,10 +259,12 @@ def termira(screen):
     refresh_delta = timedelta(seconds=0)
 
     issues = None
-    show_help = False
 
     current = 0
     offset = 0
+
+    current_mode = 'overview'
+    last_mode = ''
 
     while True:
         height, width = screen.getmaxyx()
@@ -247,14 +280,24 @@ def termira(screen):
             force_refresh = False
 
         screen.erase()
-        title(screen, 'termira v0.1 | q: Quit | ?: Help')
 
-        if show_help:
+        if current_mode == 'help':
+            title(screen, 'termira v0.1 | q: Quit | ?: leave help screen')
+            status(screen, '')
             show_help_screen(screen)
-            status(screen, 'Press ? again to exit help')
-        else:
+
+        elif current_mode == 'overview':
+            title(screen, 'termira v0.1 | q: Quit | ?: Help/JQL list')
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
             show_issues(screen, offset, current, issues)
+
+        elif current_mode == 'transition':
+            title(screen, 'termira v0.1 | Enter transition ID or press enter to leave')
+            force_refresh = show_transition(screen, offset, current, issues)
+            current_mode = 'overview'
+
+        else:
+            status(screen, "ERROR: '"+current_mode+"' is not a valid view mode")
 
         screen.refresh()
         screen.timeout(1000)
@@ -272,9 +315,12 @@ def termira(screen):
         if char in ['l']:
             open_permalink(issues[current].permalink())
 
+        if char in ['t']:
+            current_mode = 'transition'
+
         if char in ['r']:
             force_refresh = True
-            show_help = False
+            current_mode = 'overview'
 
         if char in ['R']:
             config_tmp = configparser.ConfigParser()
@@ -287,7 +333,7 @@ def termira(screen):
                 query = config['queries'][q_list[0]]
                 force_refresh = True
 
-            show_help = False
+            current_mode = 'overview'
 
         if char in ['f']:
             q = query_string(screen, 'filter alias or JQL: ')
@@ -299,10 +345,16 @@ def termira(screen):
                 force_refresh = True
                 query = q
 
-            show_help = False
+            current_mode = 'overview'
 
         if char in ['?', 'h']:
-            show_help = not show_help
+            if current_mode == 'help':
+                current_mode = last_mode
+
+            else:
+                last_mode = current_mode
+                current_mode = 'help'
+
 
         bottompad = starty = 2
 
