@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from jira import JIRA
 import json
@@ -399,7 +399,7 @@ def termira(screen):
 if __name__ == '__main__':
     while True:
         try:
-            config.read('.termira.ini')
+            config.read(expanduser('~/.termira.ini'))
 
             if 'jira' not in config:
                 raise KeyError("Required Group 'jira' is missing in config")
