@@ -281,7 +281,7 @@ def termira(screen):
             screen.refresh()
 
             selected = set()
-            issues = jira.search_issues(query, maxResults=50)
+            issues = jira.search_issues(query, maxResults=100)
             last_key = datetime.now()
             refresh_delta = timedelta(seconds=0)
             force_refresh = False
@@ -294,7 +294,7 @@ def termira(screen):
             show_help_screen(screen)
 
         elif current_mode == 'overview':
-            title(screen, 'termira v0.1 | q: Quit | ?: Help/JQL list')
+            title(screen, 'termira v1 | q: Quit | ?: Help/JQL list | '+str(len(issues))+' Issues shown')
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
             show_issues(screen, offset, current, issues)
 
