@@ -201,7 +201,7 @@ def show_issues(screen, offset, current, issues):
     addstr(screen, margin_top, 0, text)
 
     y = margin_top + 1
-    for i, issue in enumerate(issues):
+    for i, issue in enumerate(issues[offset:]):
         if y >= margin_top + usable_height_for_items:
             break
 
