@@ -294,7 +294,7 @@ def termira(screen):
             show_help_screen(screen)
 
         elif current_mode == 'overview':
-            title(screen, 'termira v1 | q: Quit | ?: Help/JQL list | '+str(len(issues))+' Issues shown')
+            title(screen, 'termira v1 | q: Quit | ?: Help/JQL list | '+str(len(issues))+' Issues returned by search')
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
             show_issues(screen, offset, current, issues)
 
