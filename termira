@@ -53,18 +53,12 @@ def status(win, msg):
 def default_status(screen, query, refresh_delta, refresh_every):
     height, width = screen.getmaxyx()
 
-    jql = f'JQL: {query}'
-
     fraction = refresh_delta.total_seconds() / refresh_every.total_seconds()
     fraction = max(0, min(1, fraction))
     fill_len = 10
     fill = int(fill_len * fraction)
     fill_pad = fill_len - fill
-    indicators = '[' + '#' * fill + '-' * fill_pad + ']'
-
-    msg = jql
-    msg += ' ' * max(0, width - len(jql) - len(indicators))
-    msg += indicators
+    msg = '█' * fill + '░' * fill_pad + '  '+query
 
     return msg
 
