@@ -271,7 +271,7 @@ def termira(screen):
         height, width = screen.getmaxyx()
 
         if (issues is None or force_refresh) and query != '':
-            status(screen, 'Refreshing ...')
+            status(screen, '██████████ Refreshing ...')
             screen.refresh()
 
             selected = set()
