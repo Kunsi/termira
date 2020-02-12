@@ -183,7 +183,7 @@ def show_issues(screen, offset, current, issues):
     if usable_height_for_items <= 0:
         return 0
 
-    text = '{:12s}{:12s}{:90s}{:15s}{:30s}{:s}'.format(
+    text = '{:12s}{:12s}{:90s}{:20s}{:30s}{:s}'.format(
         'Key',
         'Status',
         'Summary',
@@ -206,11 +206,11 @@ def show_issues(screen, offset, current, issues):
 
         created = datetime.fromisoformat(issue.fields.created[0:19])
 
-        text = '{:12s}{:12s}{:90s}{:15s}{:30s}'.format(
+        text = '{:12s}{:12s}{:90s}{:20s}{:30s}'.format(
             issue.key,
             issue.fields.status.name,
             issue.fields.summary,
-            created.strftime('%d.%m. %H:%M'),
+            created.strftime('%d.%m.%Y %H:%M'),
             issue.fields.creator.displayName,
         )
 
@@ -271,7 +271,7 @@ def termira(screen):
         height, width = screen.getmaxyx()
 
         if (issues is None or force_refresh) and query != '':
-            status(screen, '██████████ Refreshing ...')
+            status(screen, '██████████  Refreshing ...')
             screen.refresh()
 
             selected = set()
