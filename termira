@@ -205,11 +205,15 @@ def show_issues(screen, offset, current, issues):
             attrs |= curses.A_REVERSE
 
         created = datetime.fromisoformat(issue.fields.created[0:19])
+        summary = issue.fields.summary
+
+        if len(summary) > 88:
+            summary = summary[:88] + '…'
 
         text = '{:12s}{:12s}{:90s}{:20s}{:30s}'.format(
             issue.key,
             issue.fields.status.name,
-            issue.fields.summary,
+            summary,
             created.strftime('%d.%m.%Y %H:%M'),
             issue.fields.creator.displayName,
         )
