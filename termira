@@ -312,7 +312,7 @@ def termira(screen):
             screen.refresh()
 
             selected = set()
-            issues = jira.search_issues(query, maxResults=100)
+            issues = jira.search_issues(query, maxResults=False)
             last_key = datetime.now()
             refresh_delta = timedelta(seconds=0)
             force_refresh = False
