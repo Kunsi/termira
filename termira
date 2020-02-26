@@ -10,7 +10,7 @@ import configparser
 from curses.textpad import Textbox
 import locale
 from jira.exceptions import JIRAError
-from subprocess import Popen
+from subprocess import Popen, DEVNULL
 from signal import signal, SIGCHLD, SIG_IGN
 
 COLORS = {
@@ -282,7 +282,7 @@ def open_permalink(link):
         else:
             args_now.append(a)
 
-    Popen(args_now)
+    Popen(args_now, stdout=DEVNULL, stderr=DEVNULL)
 
 
 
