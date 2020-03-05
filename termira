@@ -4,24 +4,28 @@ from jira import JIRA
 import json
 import curses
 from datetime import datetime, timedelta
-from os.path import expanduser
 from traceback import print_exc
 import configparser
 from curses.textpad import Textbox
 import locale
 from jira.exceptions import JIRAError
-from subprocess import Popen, DEVNULL
+from subprocess import Popen, check_output, DEVNULL
 from signal import signal, SIGCHLD, SIG_IGN
+from os import path, chdir
 
 COLORS = {
     'default': 0,
     'bar': 1,
 }
 
+chdir(path.dirname(path.abspath(__file__)))
+
 locale.setlocale(locale.LC_ALL, '')
 
 config = configparser.ConfigParser()
 query = ''
+
+termira_version = check_output(['git', 'describe', '--always']).decode('utf-8').strip()
 
 
 
@@ -256,13 +260,6 @@ def show_issues(screen, offset, current, issues):
 
         addstr(screen, y, 0, fmt_line(issue, lens, width), attrs)
 
-        #    'link': issue.permalink(),
-        #    'updated': issue.fields.updated,
-        #    'labels': issue.fields.labels,
-        #    'components': issue.fields.components,
-        #    'type': issue.fields.issuetype.name,
-        #    output[issue.key]['description'] = issue.fields.description
-
         y += 1
 
 
@@ -320,17 +317,17 @@ def termira(screen):
         screen.erase()
 
         if current_mode == 'help':
-            title(screen, 'termira v0.1 | q: Quit | ?: leave help screen')
+            title(screen, 'termira {} | q: Quit | ?: leave help screen'.format(termira_version))
             status(screen, '')
             show_help_screen(screen)
 
         elif current_mode == 'overview':
-            title(screen, 'termira v1 | q: Quit | ?: Help/JQL list | '+str(len(issues))+' Issues returned by search')
+            title(screen, 'termira {} | q: Quit | ?: Help/JQL list | {} Issues returned by search'.format(termira_version, len(issues)))
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
             show_issues(screen, offset, current, issues)
 
         elif current_mode == 'transition':
-            title(screen, 'termira v0.1 | Enter transition ID or press enter to leave')
+            title(screen, 'termira {} | Enter transition ID or press enter to leave'.format(termira_version))
             force_refresh = show_transition(screen, offset, current, issues)
             current_mode = 'overview'
 
@@ -430,7 +427,7 @@ def termira(screen):
 if __name__ == '__main__':
     while True:
         try:
-            config.read(expanduser('~/.termira.ini'))
+            config.read(path.expanduser('~/.termira.ini'))
 
             if 'jira' not in config:
                 raise KeyError("Required Group 'jira' is missing in config")
