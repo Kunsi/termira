@@ -359,7 +359,7 @@ def termira(screen):
 
         if char in ['R']:
             config_tmp = configparser.ConfigParser()
-            config_tmp.read(expanduser('~/.termira.ini'))
+            config_tmp.read(path.expanduser('~/.termira.ini'))
 
             if len(config_tmp['queries'].keys()) > 0:
                 config = config_tmp
