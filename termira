@@ -200,8 +200,35 @@ def show_issues(screen, offset, current, issues):
     height, width = screen.getmaxyx()
 
     margin_top = margin_bottom = 1
+    description_lines = []
 
-    usable_height_for_items = height - margin_top - margin_bottom
+    try:
+        # issue description fields may be longer than screen width, so
+        # we get the first 10 lines of text, then split it into words,
+        # then assemble the lines back so they fit into the screen.
+
+        i = 0
+        for l in issues[current].fields.description.split("\n")[:10]:
+            tmp_line = []
+
+            for word in l.split():
+                if (len(' '.join(tmp_line)) + len(word) + 1) > width:
+                    description_lines.append(' '.join(tmp_line))
+                    tmp_line = []
+
+                tmp_line.append(word)
+
+            description_lines.append(' '.join(tmp_line))
+
+    except:
+        pass # silently ignore all errors in try block
+
+    if len(description_lines) > 0:
+        additional_lines_needed = len(description_lines) + 1
+    else:
+        additional_lines_needed = 0
+
+    usable_height_for_items = height - margin_top - margin_bottom - additional_lines_needed
     if usable_height_for_items <= 0:
         return 0
 
@@ -261,6 +288,18 @@ def show_issues(screen, offset, current, issues):
         addstr(screen, y, 0, fmt_line(issue, lens, width), attrs)
 
         y += 1
+
+    if len(description_lines) > 0:
+        y = margin_top + usable_height_for_items
+
+        addstr(screen, y, 0, line('Issue description (first 10 lines)', width), curses.color_pair(COLORS['bar']))
+
+        y += 1
+
+        for description_line in description_lines:
+            addstr(screen, y, 0, description_line)
+
+            y += 1
 
 
 
