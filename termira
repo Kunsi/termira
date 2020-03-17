@@ -232,6 +232,11 @@ def show_issues(screen, offset, current, issues):
     if usable_height_for_items <= 0:
         return 0
 
+    # scroll the upper half of the window if currently selected issue
+    # is not visible, because there are too many description_lines
+    if (current - offset) >= (usable_height_for_items - 1):
+        offset = max(current - usable_height_for_items + 2, 0)
+
     # Collect lines to show. For now, we collect a list of tuples, where
     # each item of a tuple corresponds to a column.
     lines = []
