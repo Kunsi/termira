@@ -8,5 +8,4 @@ A little tool to show JIRA issues on the terminal
 
 
 # Requested features
-* Show issue details
 * Show issue comments
