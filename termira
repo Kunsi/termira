@@ -223,10 +223,7 @@ def show_issues(screen, offset, current, issues):
     except:
         pass # silently ignore all errors in try block
 
-    if len(description_lines) > 0:
-        additional_lines_needed = len(description_lines) + 1
-    else:
-        additional_lines_needed = 0
+    additional_lines_needed = len(description_lines) + 1
 
     usable_height_for_items = height - margin_top - margin_bottom - additional_lines_needed
     if usable_height_for_items <= 0:
@@ -294,17 +291,37 @@ def show_issues(screen, offset, current, issues):
 
         y += 1
 
-    if len(description_lines) > 0:
-        y = margin_top + usable_height_for_items
+    y = margin_top + usable_height_for_items
 
-        addstr(screen, y, 0, line('Issue description (first 10 lines)', width), curses.color_pair(COLORS['bar']))
+
+    # comments and watchers may or may not be present, so we just wrap
+    # everything in a try..except to ignore all errors, same as we do
+    # with description
+    watchers = '???'
+
+    try:
+        watchers = issues[current].fields.watches.watchCount
+    except AttributeError:
+        pass
+
+    created = datetime.fromisoformat(issues[current].fields.created[0:19])
+    updated = datetime.fromisoformat(issues[current].fields.updated[0:19])
+
+    addstr(screen, y, 0, line('{key} {summary} | {watchers} watcher{ws} | Created on {created} | Last updated on {updated}'.format(
+            key=issues[current].key,
+            summary=issues[current].fields.summary,
+            watchers=watchers,
+            ws='' if watchers == 1 else 's',
+            created=created.strftime('%d.%m.%Y %H:%M'),
+            updated=updated.strftime('%d.%m.%Y %H:%M'),
+        ), width), curses.color_pair(COLORS['bar']))
+
+    y += 1
+
+    for description_line in description_lines:
+        addstr(screen, y, 0, description_line)
 
         y += 1
-
-        for description_line in description_lines:
-            addstr(screen, y, 0, description_line)
-
-            y += 1
 
 
 
