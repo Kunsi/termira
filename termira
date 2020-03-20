@@ -375,6 +375,12 @@ def termira(screen):
             refresh_delta = timedelta(seconds=0)
             force_refresh = False
 
+            if current >= len(issues):
+                current = len(issues) - 1
+
+            if offset >= len(issues):
+                offset = len(issues) - 1
+
         screen.erase()
 
         if current_mode == 'help':
