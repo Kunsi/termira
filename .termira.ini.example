@@ -13,4 +13,7 @@ watching = (reporter = currentUser() OR watcher = currentUser()) AND (assignee !
 
 [columns]
 # These are the only columns currently supported:
-show = Key,Status,Summary,Created,Creator,Assignee
+show = Key,Status,Summary,Created,Updated,Creator,Assignee
+
+[date]
+format = %%d.%%m.%%Y %%H:%%M

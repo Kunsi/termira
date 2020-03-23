@@ -177,6 +177,13 @@ def show_transition(screen, offset, current, issues):
     return False
 
 
+def fmt_date(jira_date, fmt):
+    # FIXME Support time zones
+    # That [0:19] strips away the time zone info because Python does not
+    # understand that. Use dateutil or a similar library.
+    return datetime.fromisoformat(jira_date[0:19]).strftime(fmt)
+
+
 def fmt_line(line_dict, columns, lens, total_max_width):
     # "columns" dictates the order of fields and which of them to show.
     # Takes a dict (the individual columns) and a dict of lengths.
@@ -206,7 +213,7 @@ def fmt_line(line_dict, columns, lens, total_max_width):
     return out
 
 
-def show_issues(screen, offset, current, issues, columns):
+def show_issues(screen, offset, current, issues, columns, date_format):
     height, width = screen.getmaxyx()
 
     margin_top = margin_bottom = 1
@@ -249,19 +256,18 @@ def show_issues(screen, offset, current, issues, columns):
     lines = []
     for issue in issues:
         formatted = {
+            'Created': fmt_date(issue.fields.created, date_format),
             'Creator': issue.fields.creator.displayName,
             'Key': issue.key,
             'Status': issue.fields.status.name,
             'Summary': issue.fields.summary,
+            'Updated': fmt_date(issue.fields.updated, date_format),
         }
 
         if issue.fields.assignee:
             formatted['Assignee'] = issue.fields.assignee.displayName
         else:
             formatted['Assignee'] = ''
-
-        created = datetime.fromisoformat(issue.fields.created[0:19])
-        formatted['Created'] = created.strftime('%d.%m.%Y %H:%M')
 
         lines.append(formatted)
 
@@ -405,7 +411,7 @@ def termira(screen):
         elif current_mode == 'overview':
             title(screen, 'termira {} | q: Quit | ?: Help/JQL list | {} Issues returned by search'.format(termira_version, len(issues)))
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
-            show_issues(screen, offset, current, issues, columns)
+            show_issues(screen, offset, current, issues, columns, config['date']['format'])
 
         elif current_mode == 'transition':
             title(screen, 'termira {} | Enter transition ID or press enter to leave'.format(termira_version))
