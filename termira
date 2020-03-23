@@ -177,18 +177,28 @@ def show_transition(screen, offset, current, issues):
     return False
 
 
-def fmt_line(line_tuple, lens, total_max_width):
-    # Takes a tuple (the individual columns) and a dict of lengths.
+def fmt_line(line_dict, header, lens, total_max_width):
+    # "header" dictates the order of fields and which of them to show.
+    # Takes a dict (the individual columns) and a dict of lengths.
     # Creates a string where each column is padded to the given length.
     # The total length, however, will not exceed "total_max_width".
 
+    # Show header instead of an issue. Quick hack: Construct a dummy
+    # dict on the fly.
+    if line_dict is None:
+        line_dict = {}
+        for i in header:
+            line_dict[i] = i
+
     formatted_tuples = []
-    for i, element in enumerate(line_tuple):
+    for col_key in header:
+        element = line_dict[col_key]
+        max_len = lens[col_key]
         # Truncate individual columns if they exceed the configured
         # length.
-        if len(element) > lens[i]:
-            element = element[:lens[i] - 1] + '…'
-        formatted_tuples.append(('{:' + str(lens[i]) + 's}').format(element))
+        if len(element) > max_len:
+            element = element[:max_len - 1] + '…'
+        formatted_tuples.append(('{:' + str(max_len) + 's}').format(element))
     out = '  '.join(formatted_tuples)
     # Truncate final output if needed.
     if len(out) > total_max_width:
@@ -241,44 +251,47 @@ def show_issues(screen, offset, current, issues):
     # each item of a tuple corresponds to a column.
     lines = []
     for issue in issues:
+        formatted = {
+            'Creator': issue.fields.creator.displayName,
+            'Key': issue.key,
+            'Status': issue.fields.status.name,
+            'Summary': issue.fields.summary,
+        }
+
         if issue.fields.assignee:
-            assignee = issue.fields.assignee.displayName
+            formatted['Assignee'] = issue.fields.assignee.displayName
         else:
-            assignee = ''
+            formatted['Assignee'] = ''
 
         created = datetime.fromisoformat(issue.fields.created[0:19])
+        formatted['Created'] = created.strftime('%d.%m.%Y %H:%M')
 
-        lines.append((
-            issue.key,
-            issue.fields.status.name,
-            issue.fields.summary,
-            created.strftime('%d.%m.%Y %H:%M'),
-            issue.fields.creator.displayName,
-            assignee,
-        ))
+        lines.append(formatted)
 
     # Find max length for each column. Later on, columns may get padded
     # to this length if they're too short.
     header = ('Key', 'Status', 'Summary', 'Created', 'Creator', 'Assignee')
     lens = {}
-    for l in [header] + lines:
-        for i, element in enumerate(l):
-            curmax = lens.get(i, 0)
-            lens[i] = max(curmax, len(element))
+    for col_key in header:
+        for issue_fmt in lines:
+            element = issue_fmt[col_key]
+            curmax = lens.get(col_key, len(col_key))
+            lens[col_key] = max(curmax, len(element))
 
     # "Summary" is special. All the other columns behave nicely, but
     # Summary can grow very large or stay very short. We will make this
     # the one column that just gets all the remaining space (but a
     # minimum width of 10).
-    consumed = 0
-    for idx, l in lens.items():
-        if idx != 2:
-            consumed += l + 2  # + 2 because of padding between columns
-    lens[2] = max(width - consumed, 10)
+    if 'Summary' in header:
+        consumed = 0
+        for idx, l in lens.items():
+            if idx != 'Summary':
+                consumed += l + 2  # + 2 because of padding between columns
+        lens['Summary'] = max(width - consumed, 10)
 
     # Note that, when we show lines, we truncate them to "width" either
     # way. Allows us to handle very small screens.
-    addstr(screen, margin_top, 0, fmt_line(header, lens, width))
+    addstr(screen, margin_top, 0, fmt_line(None, header, lens, width))
 
     y = margin_top + 1
     for i, issue in enumerate(lines[offset:]):
@@ -290,7 +303,7 @@ def show_issues(screen, offset, current, issues):
         if i + offset == current:
             attrs |= curses.A_REVERSE
 
-        addstr(screen, y, 0, fmt_line(issue, lens, width), attrs)
+        addstr(screen, y, 0, fmt_line(issue, header, lens, width), attrs)
 
         y += 1
 
