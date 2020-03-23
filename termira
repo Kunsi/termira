@@ -177,8 +177,8 @@ def show_transition(screen, offset, current, issues):
     return False
 
 
-def fmt_line(line_dict, header, lens, total_max_width):
-    # "header" dictates the order of fields and which of them to show.
+def fmt_line(line_dict, columns, lens, total_max_width):
+    # "columns" dictates the order of fields and which of them to show.
     # Takes a dict (the individual columns) and a dict of lengths.
     # Creates a string where each column is padded to the given length.
     # The total length, however, will not exceed "total_max_width".
@@ -187,11 +187,11 @@ def fmt_line(line_dict, header, lens, total_max_width):
     # dict on the fly.
     if line_dict is None:
         line_dict = {}
-        for i in header:
+        for i in columns:
             line_dict[i] = i
 
     formatted_tuples = []
-    for col_key in header:
+    for col_key in columns:
         element = line_dict[col_key]
         max_len = lens[col_key]
         # Truncate individual columns if they exceed the configured
@@ -206,7 +206,7 @@ def fmt_line(line_dict, header, lens, total_max_width):
     return out
 
 
-def show_issues(screen, offset, current, issues):
+def show_issues(screen, offset, current, issues, columns):
     height, width = screen.getmaxyx()
 
     margin_top = margin_bottom = 1
@@ -270,9 +270,8 @@ def show_issues(screen, offset, current, issues):
 
     # Find max length for each column. Later on, columns may get padded
     # to this length if they're too short.
-    header = ('Key', 'Status', 'Summary', 'Created', 'Creator', 'Assignee')
     lens = {}
-    for col_key in header:
+    for col_key in columns:
         for issue_fmt in lines:
             element = issue_fmt[col_key]
             curmax = lens.get(col_key, len(col_key))
@@ -282,7 +281,7 @@ def show_issues(screen, offset, current, issues):
     # Summary can grow very large or stay very short. We will make this
     # the one column that just gets all the remaining space (but a
     # minimum width of 10).
-    if 'Summary' in header:
+    if 'Summary' in columns:
         consumed = 0
         for idx, l in lens.items():
             if idx != 'Summary':
@@ -291,7 +290,7 @@ def show_issues(screen, offset, current, issues):
 
     # Note that, when we show lines, we truncate them to "width" either
     # way. Allows us to handle very small screens.
-    addstr(screen, margin_top, 0, fmt_line(None, header, lens, width))
+    addstr(screen, margin_top, 0, fmt_line(None, columns, lens, width))
 
     y = margin_top + 1
     for i, issue in enumerate(lines[offset:]):
@@ -303,7 +302,7 @@ def show_issues(screen, offset, current, issues):
         if i + offset == current:
             attrs |= curses.A_REVERSE
 
-        addstr(screen, y, 0, fmt_line(issue, header, lens, width), attrs)
+        addstr(screen, y, 0, fmt_line(issue, columns, lens, width), attrs)
 
         y += 1
 
@@ -361,6 +360,8 @@ def termira(screen):
     while True:
         height, width = screen.getmaxyx()
 
+        columns = config['columns']['show'].split(',')
+
         if (issues is None or force_refresh) and query != '':
             status(screen, '██████████  Refreshing ...')
             screen.refresh()
@@ -381,7 +382,7 @@ def termira(screen):
         elif current_mode == 'overview':
             title(screen, 'termira {} | q: Quit | ?: Help/JQL list | {} Issues returned by search'.format(termira_version, len(issues)))
             status(screen, default_status(screen, query, refresh_delta, refresh_every))
-            show_issues(screen, offset, current, issues)
+            show_issues(screen, offset, current, issues, columns)
 
         elif current_mode == 'transition':
             title(screen, 'termira {} | Enter transition ID or press enter to leave'.format(termira_version))

@@ -10,3 +10,7 @@ permalink = firefox __LINK__
 mine-watching = (assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
 mine = assignee = currentUser() AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
 watching = (reporter = currentUser() OR watcher = currentUser()) AND (assignee != currentUser() OR assignee is EMPTY) AND status not in (Resolved, Closed, Done) ORDER BY created ASC, votes DESC
+
+[columns]
+# These are the only columns currently supported:
+show = Key,Status,Summary,Created,Creator,Assignee
