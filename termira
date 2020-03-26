@@ -361,6 +361,14 @@ def open_permalink(link):
     Popen(args_now, stdout=DEVNULL, stderr=DEVNULL)
 
 
+def assign_issue(screen, issues, current, assignee):
+    issue = issues[current]
+
+    status(screen, 'Assigning {} to {}'.format(issue.key, assignee))
+
+    jira.assign_issue(issue.key, assignee)
+
+
 
 def termira(screen):
     global config, query
@@ -436,6 +444,10 @@ def termira(screen):
 
         if char in ['l']:
             open_permalink(issues[current].permalink())
+
+        if char in ['i']:
+            assign_issue(screen, issues, current, config['jira']['user'])
+            force_refresh = True
 
         if char in ['t']:
             current_mode = 'transition'
