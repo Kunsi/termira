@@ -322,16 +322,13 @@ def show_issues(screen, offset, current, issues, columns, date_format):
     except AttributeError:
         pass
 
-    created = datetime.fromisoformat(issues[current].fields.created[0:19])
-    updated = datetime.fromisoformat(issues[current].fields.updated[0:19])
-
     addstr(screen, y, 0, line('{key} {summary} | {watchers} watcher{ws} | Created on {created} | Last updated on {updated}'.format(
             key=issues[current].key,
             summary=issues[current].fields.summary,
             watchers=watchers,
             ws='' if watchers == 1 else 's',
-            created=created.strftime('%d.%m.%Y %H:%M'),
-            updated=updated.strftime('%d.%m.%Y %H:%M'),
+            created=fmt_date(issues[current].fields.created, date_format),
+            updated=fmt_date(issues[current].fields.updated, date_format),
         ), width), curses.color_pair(COLORS['bar']))
 
     y += 1
