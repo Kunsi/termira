@@ -237,7 +237,10 @@ def show_issues(screen, offset, current, issues, columns, date_format):
             )
             for wrapped_line in wrapped_lines:
                 description_lines.append(wrapped_line)
+
     description_lines = description_lines[:10]
+    while len(description_lines) > 0 and description_lines[-1] == '':
+        description_lines.pop()
 
     additional_lines_needed = len(description_lines) + 1
 
