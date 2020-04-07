@@ -11,6 +11,7 @@ import locale
 from jira.exceptions import JIRAError
 from subprocess import Popen, check_output, DEVNULL
 from signal import signal, SIGCHLD, SIG_IGN
+from textwrap import wrap
 from os import path, chdir
 
 COLORS = {
@@ -217,28 +218,29 @@ def show_issues(screen, offset, current, issues, columns, date_format):
     height, width = screen.getmaxyx()
 
     margin_top = margin_bottom = 1
+
+    to_wrap = issues[current].fields.description
+    if to_wrap is None:
+        to_wrap = ''
+
     description_lines = []
+    for orig_line in to_wrap.strip().splitlines():
+        # wrap() returns an empty list for an empty string as input, but
+        # we want to keep empty lines as separators.
+        if orig_line.strip() == '':
+            description_lines.append('')
+        else:
+            wrapped_lines = wrap(
+                orig_line,
+                replace_whitespace=False,
+                width=width,
+            )
+            for wrapped_line in wrapped_lines:
+                description_lines.append(wrapped_line)
 
-    try:
-        # issue description fields may be longer than screen width, so
-        # we get the first 10 lines of text, then split it into words,
-        # then assemble the lines back so they fit into the screen.
-
-        i = 0
-        for l in issues[current].fields.description.split("\n")[:10]:
-            tmp_line = []
-
-            for word in l.split():
-                if (len(' '.join(tmp_line)) + len(word) + 1) > width:
-                    description_lines.append(' '.join(tmp_line))
-                    tmp_line = []
-
-                tmp_line.append(word)
-
-            description_lines.append(' '.join(tmp_line))
-
-    except:
-        pass # silently ignore all errors in try block
+    description_lines = description_lines[:10]
+    while len(description_lines) > 0 and description_lines[-1] == '':
+        description_lines.pop()
 
     additional_lines_needed = len(description_lines) + 1
 
