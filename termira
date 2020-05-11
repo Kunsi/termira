@@ -26,7 +26,10 @@ locale.setlocale(locale.LC_ALL, '')
 config = configparser.ConfigParser()
 query = ''
 
-termira_version = check_output(['git', 'describe', '--always']).decode('utf-8').strip()
+try:
+    termira_version = check_output(['git', 'describe', '--always']).decode('utf-8').strip()
+except:
+    termira_version = 'vUNKNOWN'
 
 
 
