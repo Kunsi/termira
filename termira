@@ -13,6 +13,8 @@ from subprocess import Popen, check_output, DEVNULL
 from signal import signal, SIGCHLD, SIG_IGN
 from textwrap import wrap
 from os import path, chdir
+from requests.exceptions import ReadTimeout
+from time import sleep
 
 COLORS = {
     'default': 0,
@@ -544,10 +546,12 @@ if __name__ == '__main__':
             curses.wrapper(termira)
             exit(0)
         except JIRAError as e:
-            print("JIRA Error: {}".format(e.status_code))
-            print(e.text)
-            print()
-            input('Press enter to reset and continue.')
+            print('JIRAError {}: {}'.format(e.status_code, e.text))
+            print('Restarting in 15 seconds, press Ctrl-C to abort')
+            sleep(15)
+        except ReadTimeout:
+            print('Timeout while reading from JIRA. Restarting in 15 seconds, press Ctrl-C to abort')
+            sleep(15)
         except Exception:
             print('It appears we had a whoopsie. Please report this.')
             print()
