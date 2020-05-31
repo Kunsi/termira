@@ -9,12 +9,13 @@ from datetime import datetime, timedelta
 from jira import JIRA
 from jira.exceptions import JIRAError
 from os import path, chdir
-from requests.exceptions import ReadTimeout
+from requests.exceptions import RequestException
 from signal import signal, SIGCHLD, SIG_IGN
 from subprocess import Popen, check_output, DEVNULL
 from textwrap import wrap
 from time import sleep
 from traceback import print_exc
+
 
 COLORS = {
     'default': 0,
@@ -535,6 +536,9 @@ if __name__ == '__main__':
             if 'jira' not in config:
                 raise KeyError("Required Group 'jira' is missing in config")
 
+            if not config['jira']['url'].endswith('/'):
+                raise ValueError('Jira URL must end with /')
+
             jira = JIRA(config['jira']['url'], auth=(config['jira']['user'], config['jira']['pass']), timeout=10, async_=True, max_retries=2)
 
             queries = list(config['queries'].keys())
@@ -549,8 +553,9 @@ if __name__ == '__main__':
             print('JIRAError {}: {}'.format(e.status_code, e.text))
             print('Restarting in 15 seconds, press Ctrl-C to abort')
             sleep(15)
-        except ReadTimeout:
-            print('Timeout while reading from JIRA. Restarting in 15 seconds, press Ctrl-C to abort')
+        except RequestException as e:
+            print('An error occured while trying to connect to JIRA. Restarting in 15 seconds.')
+            print(e)
             sleep(15)
         except Exception:
             print('It appears we had a whoopsie. Please report this.')
