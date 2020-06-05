@@ -4,6 +4,7 @@ import configparser
 import curses
 import json
 import locale
+import logging
 from curses.textpad import Textbox
 from datetime import datetime, timedelta
 from jira import JIRA
@@ -12,6 +13,7 @@ from os import path, chdir
 from requests.exceptions import RequestException
 from signal import signal, SIGCHLD, SIG_IGN
 from subprocess import Popen, check_output, DEVNULL
+from sys import maxsize
 from textwrap import wrap
 from time import sleep
 from traceback import print_exc
@@ -20,11 +22,19 @@ from traceback import print_exc
 COLORS = {
     'default': 0,
     'bar': 1,
+    'error': 2,
 }
 
 chdir(path.dirname(path.abspath(__file__)))
 
 locale.setlocale(locale.LC_ALL, '')
+
+# Disable logging to stdout
+# Even though the Jira library has an option to disable logging, there
+# are still some error messages displayed, for example when connection
+# errors occur. All our error handling happens inside termira, additional
+# error messages just mess with the layout. Get rid of those messages.
+logging.disable(maxsize)
 
 config = configparser.ConfigParser()
 query = ''
@@ -55,21 +65,19 @@ def title(win, msg):
 
 
 
-def status(win, msg):
+def status(win, msg, color='bar'):
     height, width = win.getmaxyx()
-    addstr(win, height - 1, 0, line(msg, width), curses.color_pair(COLORS['bar']))
+    addstr(win, height - 1, 0, line(msg, width), curses.color_pair(COLORS[color]))
 
 
 
-def default_status(screen, query, refresh_delta, refresh_every):
-    height, width = screen.getmaxyx()
-
+def refresh_indicator(refresh_delta, refresh_every):
     fraction = refresh_delta.total_seconds() / refresh_every.total_seconds()
     fraction = max(0, min(1, fraction))
     fill_len = 10
     fill = int(fill_len * fraction)
     fill_pad = fill_len - fill
-    msg = '█' * fill + '░' * fill_pad + '  '+query
+    msg = '█' * fill + '░' * fill_pad
 
     return msg
 
@@ -80,6 +88,8 @@ def textbox_input_validator(key):
         return curses.KEY_BACKSPACE
 
     return key
+
+
 
 def query_string(win, prompt):
     height, width = win.getmaxyx()
@@ -184,11 +194,13 @@ def show_transition(screen, offset, current, issues):
     return False
 
 
+
 def fmt_date(jira_date, fmt):
     # FIXME Support time zones
     # That [0:19] strips away the time zone info because Python does not
     # understand that. Use dateutil or a similar library.
     return datetime.fromisoformat(jira_date[0:19]).strftime(fmt)
+
 
 
 def fmt_line(line_dict, columns, lens, total_max_width):
@@ -218,6 +230,7 @@ def fmt_line(line_dict, columns, lens, total_max_width):
     if len(out) > total_max_width:
         out = out[:total_max_width - 1] + '…'
     return out
+
 
 
 def show_issues(screen, offset, current, issues, columns, date_format):
@@ -366,6 +379,7 @@ def open_permalink(link):
     Popen(args_now, stdout=DEVNULL, stderr=DEVNULL)
 
 
+
 def assign_issue(screen, issues, current, assignee):
     issue = issues[current]
 
@@ -381,38 +395,52 @@ def termira(screen):
     curses.curs_set(False)
     curses.use_default_colors()
     curses.init_pair(COLORS['bar'], curses.COLOR_WHITE, curses.COLOR_BLUE)
+    curses.init_pair(COLORS['error'], curses.COLOR_BLACK, curses.COLOR_RED)
 
     refresh_every = timedelta(seconds=30)
     refresh_delta = timedelta(seconds=0)
 
     issues = None
+    force_refresh = True
 
     current = 0
     offset = 0
 
     current_mode = 'overview'
     last_mode = ''
+    error = ''
 
     while True:
         height, width = screen.getmaxyx()
 
         columns = config['columns']['show'].split(',')
 
-        if (issues is None or force_refresh) and query != '':
-            status(screen, '██████████  Refreshing ...')
+        if force_refresh and query != '':
+            status(screen, '██████████  Refreshing ...', 'error' if current_mode=='error' else 'bar')
             screen.refresh()
 
-            selected = set()
-            issues = jira.search_issues(query, maxResults=False)
-            last_key = datetime.now()
             refresh_delta = timedelta(seconds=0)
+            refresh_every = timedelta(seconds=30)
             force_refresh = False
 
-            if current >= len(issues):
-                current = len(issues) - 1
+            try:
+                issues = jira.search_issues(query, maxResults=False)
 
-            if offset >= len(issues):
-                offset = len(issues) - 1
+                if current >= len(issues):
+                    current = len(issues) - 1
+
+                if offset >= len(issues):
+                    offset = len(issues) - 1
+
+                current_mode = 'overview'
+            except JIRAError as e:
+                error = repr(e)
+                current_mode = 'error'
+            except RequestException as e:
+                error = repr(e)
+                current_mode = 'error'
+
+            last_key = datetime.now()
 
         screen.erase()
 
@@ -423,16 +451,24 @@ def termira(screen):
 
         elif current_mode == 'overview':
             title(screen, 'termira {} | q: Quit | ?: Help/JQL list | {} Issues returned by search'.format(termira_version, len(issues)))
-            status(screen, default_status(screen, query, refresh_delta, refresh_every))
-            show_issues(screen, offset, current, issues, columns, config['date']['format'])
+
+            try:
+                show_issues(screen, offset, current, issues, columns, config['date']['format'])
+
+                status(screen, refresh_indicator(refresh_delta, refresh_every) + '  ' + query)
+            except Exception as e:
+                addstr(screen, 2, 0, repr(e))
+                status(screen, refresh_indicator(refresh_delta, refresh_every) + '  An Error occured while rendering issue view. Press [R] to reset to default view.', 'error')
 
         elif current_mode == 'transition':
             title(screen, 'termira {} | Enter transition ID or press enter to leave'.format(termira_version))
             force_refresh = show_transition(screen, offset, current, issues)
             current_mode = 'overview'
 
-        else:
-            status(screen, "ERROR: '"+current_mode+"' is not a valid view mode")
+        elif current_mode == 'error':
+            title(screen, 'termira {} | q: Quit | ?: Help/JQL list'.format(termira_version))
+            addstr(screen, 2, 0, error)
+            status(screen, refresh_indicator(refresh_delta, refresh_every) + '  An Error occured while getting data from Jira. Retrying automatically', 'error')
 
         screen.refresh()
         screen.timeout(1000)
@@ -528,6 +564,7 @@ def termira(screen):
                 last_key = datetime.now()
 
 
+
 if __name__ == '__main__':
     while True:
         try:
@@ -549,14 +586,6 @@ if __name__ == '__main__':
 
             curses.wrapper(termira)
             exit(0)
-        except JIRAError as e:
-            print('JIRAError {}: {}'.format(e.status_code, e.text))
-            print('Restarting in 15 seconds, press Ctrl-C to abort')
-            sleep(15)
-        except RequestException as e:
-            print('An error occured while trying to connect to JIRA. Restarting in 15 seconds.')
-            print(e)
-            sleep(15)
         except Exception:
             print('It appears we had a whoopsie. Please report this.')
             print()
